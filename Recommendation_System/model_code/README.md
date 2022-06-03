@@ -2,7 +2,7 @@
 ```python
 import Bns  
 
-model = Bns()
+model = Bns.Bns()
 
 model.fit(DATA_PATH)
 
