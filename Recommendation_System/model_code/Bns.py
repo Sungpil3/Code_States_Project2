@@ -263,7 +263,9 @@ def pickling_for_model(DATA_PATH):
         
         del countvect_df, vect, docs
 
-        return pearson_sim        
+        return pearson_sim
+
+    # 각 대주제 카테고리별로 pearson table을 생성             
     for category_code in category_code_list:
         df = df_by_category(target_category = category_code)
         df = to_matrix(df)
@@ -305,7 +307,7 @@ def explain_products(product_id_list):
     explain = test_pkl("explain")
     for count, product_id in enumerate(product_id_list):
         exp = explain[explain.index == product_id]
-        print(f"{count + 1}번째 추천 product_id = {product_id}, category_code = {exp['category_code'][product_id]}, brand = {exp['brand'][product_id]}, mean_of_price = {exp['price'][product_id]}")    
+        print(f"{count + 1}번째 추천 product_id = {product_id}, category_code = {exp['category_code'][product_id]}, brand = {exp['brand'][product_id]}, mean_of_price = {round(exp['price'][product_id], 2)}")    
 
 # Class Bns
 class Bns():
@@ -315,12 +317,16 @@ class Bns():
     
     # fit 메소드로 결과 출력에 필요한 데이터를을 생성하고 저장합니다.
     def fit(self, DATA_PATH):
-        pickling_for_model(1)
+        pickling_for_model(DATA_PATH)
     
     # user_id를 받으면 아직 보지않은 product_id 10개를 list로 반환합니다.
     def recommend(self, user_id):
+
+        # 해당 유저가 로그데이터 안에 있다면
         if user_id in test_pkl("users"):
             print(f"user_id = {user_id} 는 로그데이터 안에 있습니다.")
+
+            # 해당 유저가 조회한 상품의 수가 11개 이상이면
             if test_pkl("user_unique_product_dict")[user_id] > 10:
                 print(f"user_id = {user_id} 는 view 한 product의 개수가 {test_pkl('user_unique_product_dict')[user_id]}으로  10보다 큽니다. CF 기반의 추천을 사용합니다.")
                 als_model = test_pkl("als_model")
@@ -330,7 +336,11 @@ class Bns():
                 recommendations = list(als_model.recommend(user_index, user_item_matrix[user_index])[0])
                 als_index_to_product = test_pkl("als_index_to_product")
                 return list(map(als_index_to_product.get, recommendations))
+            
+            # 해당 유저가 조회한 상품이 10개 이하이면
             else :
+
+                # 카테고리나 브랜드가 missing인 제품을 제외하고 해당 유저가 조회한 상품이 10개 이하이면
                 if user_id in test_pkl("lower_user_list"):
                     print(f"user_id = {user_id} 는 view 한 product의 개수가 {test_pkl('user_unique_product_dict')[user_id]}으로 10이하입니다. CB 기반의 추천을 사용합니다.") 
                     most_viewed_product_id = test_pkl("user_to_most_viewed_product_id")[user_id]
@@ -342,9 +352,13 @@ class Bns():
                     pearson_table = test_pkl(f"{test_pkl('product_id_to_category_code')[most_viewed_product_id]}_pearson_table")
                     pearson_table = pearson_table[~pearson_table.index.isin(viewed_product_id_list)]
                     return list(pearson_table[most_viewed_product_id].sort_values(ascending=False).index[:10])
+                
+                # 해당 유저가 조회한 모든 제품이 카테고리나 브랜드가 결측값이라면
                 else:
                     print(f"user_id = {user_id} 는 view 한 product가 모두 category 혹은 brand가 결측값입니다. 해석의 문제로 가장 view가 많은 product 10개를 추천합니다.")
                     return test_pkl("popular_product_id_list")
+        
+        #  로그에 없는 신규유저라면
         else:
             print("로그에 없는 신규유저입니다. 가장 view가 많은 product 10개를 추천합니다.") 
             return test_pkl("popular_product_id_list")        
