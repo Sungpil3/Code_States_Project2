@@ -345,7 +345,9 @@ class Bns():
                     print(f"user_id = {user_id} 는 view 한 product의 개수가 {test_pkl('user_unique_product_dict')[user_id]}으로 10이하입니다. CB 기반의 추천을 사용합니다.") 
                     most_viewed_product_id = test_pkl("user_to_most_viewed_product_id")[user_id]
                     print(f"해당 유저가 가장 많이 본 product_id = {most_viewed_product_id}")
-                    print(f"해당 유저가 가장 많이 본 product의 category_code = {test_pkl('product_id_to_category_code')[most_viewed_product_id]}")
+                    exp = test_pkl('explain')
+                    print(f"해당 유저가 가장 많이 본 product의 category_code = {exp[exp.index == most_viewed_product_id]['category_code'][most_viewed_product_id]}")
+                    print(f"해당 유저가 가장 많이 본 product의 mean of price = {exp[exp.index == most_viewed_product_id]['price'][most_viewed_product_id]}")                    
                     user_index = test_pkl("cb_user_to_index")[user_id]
                     viewed_product_index_list = list(np.where(test_pkl("lower_user_item_matrix")[user_index].toarray()[0] != 0)[0])
                     viewed_product_id_list = list(map(test_pkl("cb_index_to_product").get, viewed_product_index_list ))
