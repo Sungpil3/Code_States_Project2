@@ -15,7 +15,7 @@ def pickling_for_model(DATA_PATH):
     
     """
     로그데이터의 csv 파일의 위치를 받아서 추천 모델에 필요한 각종 객체를 pickling 하는 함수 
-    DATA_PATH : 로그데이터의 csv 파일의 위치 ex) "data/2019-Oct.csv"
+    DATA_PATH : 로그데이터의 csv 파일의 위치 ex) "../data/2019-Oct.csv"
     """
     
     def pickling(arg_object, arg_file_name):
@@ -28,10 +28,15 @@ def pickling_for_model(DATA_PATH):
         print(f"{arg_file_name}.pkl로 pickling 완료") 
     
     # 데이터를 column별로 불러올 수 있도록 data.parquet.gzip 으로 현재 위치에 저장
-    # view 의 로그만 저장한다 
+    # 사용하지 않는 event_time, category_id, user_session 은 제거한다.
+    # 결측치는 제거하고 view 의 로그만 저장한다 
+    # 대주제 카테고리인 category_code_0 변수도 만들어준다.
     df = pd.read_csv(DATA_PATH)
+    df.dropna(inplace = True)
+    df.drop(columns = ["event_time", "category_id", "user_session"], inplace = True)
     df = df[df["event_type"] == "view"]
-    df = df.reset_index(drop = True)
+    df.reset_index(drop = True, inplace = True)
+    df["category_code_0"] = df["category_code"].apply(lambda x : x.split(".")[0])  
     df.to_parquet("view_data.parquet.gzip")
     del df
     
@@ -61,19 +66,14 @@ def pickling_for_model(DATA_PATH):
     # als_user_to_index.pkl, als_index_to_user.pkl, als_product_to_index.pkl, als_index_to_product.pkl저장
     df = pd.read_parquet("view_data.parquet.gzip", columns = ["user_id", "product_id"])
     df = df.groupby("user_id").nunique()
-
     # 유저가 view한 product의 개수가 10보다 큰 유저들만 사용합니다.
     df = df[df["product_id"] > 10]
     upper_user_list = df.index
+    del df
     df = pd.read_parquet("view_data.parquet.gzip", columns = ["user_id", "product_id", "event_type"])
     df = df[df["user_id"].isin(upper_user_list)]  
     df = df.groupby(["user_id", "product_id"]).count().reset_index()
     del upper_user_list
-
-    # 샘플링부분입니다. 실제 사용시에는 사용하지 않습니다. 
-    sample_user_ids = np.random.choice(df["user_id"].unique(), 100)
-    df = df[df["user_id"].isin(sample_user_ids)].reset_index(drop=True)  
-    del sample_user_ids
 
     # 데이터를 csr_matrix로 만드는 과정입니다.
     user_unique = df['user_id'].unique()
@@ -110,16 +110,15 @@ def pickling_for_model(DATA_PATH):
 
     # 10개 이하의 product 를 view한 user_id를 받으면 가장 view가 많은 상품을 반환하는 dict 저장 (단 category_code나 brand가 결측값인 로그는 제거한다)
     # user_to_most_viewed_product_id
-    df = pd.read_parquet("view_data.parquet.gzip", columns = ["user_id", "product_id", "category_code", "brand"])
-    df = df.dropna().reset_index(drop =True)
-    df = df[["user_id", "product_id"]]
+
+    df = pd.read_parquet("view_data.parquet.gzip", columns = ["product_id", "user_id"])
     df = df.groupby("user_id").nunique()
     df = df[df["product_id"] <= 10]
     lower_user_list = df.index
     df = pd.read_parquet("view_data.parquet.gzip", columns = ["user_id", "product_id", "event_type"])
     df = df[df["user_id"].isin(lower_user_list)]  
-    df = df.groupby(["user_id", "product_id"]).count().reset_index()
-    pickling(lower_user_list, "lower_user_list")
+    df = df.reset_index(drop =True)
+    df = df.groupby(["user_id", "product_id"]).count().reset_index()    
     del lower_user_list
 
     # 데이터를 csr_matrix로 만드는 과정입니다.
@@ -165,120 +164,68 @@ def pickling_for_model(DATA_PATH):
     del df, user_unique, product_unique, num_user, num_product
     
     # CB를 위한 Persontable을 category에 따라 pcikling
-    # pearson_table을 만들기 위한 데이터 따로 저장
-    df = pd.read_parquet("view_data.parquet.gzip", columns = ["user_id",	"event_type",	"product_id",	"category_id",	"category_code",	"brand",	"price"])
-    df = df.fillna("missing")
-    df["event_type"] = [1] * df.shape[0]
-    df.rename(columns = {'event_type':'event_type_view'},inplace=True)
-    df["category_code"] = df["category_code"].apply(lambda x : x.split("."))
-    df["category_code_0"] = df["category_code"].apply(lambda x : x[0])
-    category_code_list = list(df["category_code_0"].unique())
-    category_code_list.remove("missing")
-    del df
+    def make_pearson_table(target_category):
+        '''
+        target_category 가 주어지면 해당 카테고리의 상품들로 pearson table을 만들어서 반환하는 함수
+        '''
 
-    def df_by_category(target_category = "all"):
-        """
-        매개변수
-        target_category : 1차 카테고리 코드를 지정해준다. all이면 모든 카테고리를 가져온다.
-        10개 이하의 product를 view한 user만 가져온다. 
-        """
-        df = pd.read_parquet("view_data.parquet.gzip", columns = ["user_id",	"event_type",	"product_id",	"category_id",	"category_code",	"brand",	"price"])
-        df = df.fillna("missing")
-        df["event_type"] = [1] * df.shape[0]
-        df.rename(columns = {'event_type':'event_type_view'},inplace=True)
-        df["category_code"] = df["category_code"].apply(lambda x : x.split("."))
-        df["category_code_0"] = df["category_code"].apply(lambda x : x[0])
+        # 데이터 불러오기 
+        df = pd.read_parquet("view_data.parquet.gzip", columns = ["product_id", "category_code", "brand", "price", "category_code_0"])
+
+        # 해당 카테고리만 가져오기
+        df = df[df["category_code_0"] == target_category]
+        df = df.reset_index(drop= True)
+
+        # 카테고리와 브랜드를 합친 category_code+brand 변수 생성
+        df["category_code+brand"] = df["category_code"] +  df["brand"].apply(lambda x : "." + x)
+
+        # 제품별로 category_code+brand와 가격의 평균으로 보기
+        df = df.groupby("product_id").agg({"category_code+brand" : "unique", "price" : "mean"})
+        df = df.reset_index()
+        df["category_code+brand"] = df["category_code+brand"].apply(lambda x : x[0])
         
-        # 카테고리에 적합한 df불러오기
-        if target_category != "all" :
-            df = df[df["category_code_0"] == target_category]
-        df = df[df['brand'] != 'missing']
-        df = df[['user_id','event_type_view', 'product_id', 'category_id', 'category_code', 'brand', 'price', 'category_code_0']]
-        
-        # 기존 frame에 innerjoin
-        df_user_view = df.groupby(['user_id']).agg({'event_type_view' : 'sum'}).reset_index()
-        df_pick = pd.merge(left = df , right = df_user_view[['user_id']], how = "inner", on = "user_id")
-        del df_user_view , df
-        
-        # view한 product가 10개 이하인 고객만 가져온다.
-        df_view_prod = df_pick.groupby(['user_id'])['product_id'].agg({'unique'})
-        df_view_prod['view_prod'] =df_view_prod['unique'].apply(lambda x: len(x))
-        df_view_prod = df_view_prod[df_view_prod['view_prod'] <= 10]
-        df_view_prod = df_view_prod.reset_index()
-        df_pick = pd.merge(left = df_pick , right = df_view_prod[['user_id']], how = "inner", on = "user_id")
-        del df_view_prod
-        
-        # prod_id별 mean_price 삽입
-        df_prod_id = df_pick.groupby(['product_id']).agg({'price' : 'mean'}).reset_index()
-        df_prod_id.rename(columns = {'price':'mean_price'},inplace=True)
-        df_pick = pd.merge(left = df_pick , right = df_prod_id, how = "inner", on = "product_id")
-        del df_prod_id
-        
-        # minMaxScale
+        # 가격평균을 MinMaxScaler 를 이용하여 스케일링하기
+        # df_minmax 는 스케일링된 가격평균을 가지고 있는 DataFrame
         scaler = MinMaxScaler()
-        scaler.fit(df_pick[['mean_price']])
+        df_minmax = scaler.fit_transform(df[["price"]])
+        df_minmax = pd.DataFrame(df_minmax, columns=['mMprice'])
+        df_minmax.index = df['product_id'].values
+        del scaler
 
-        mMscaled_data = scaler.transform(df_pick[['mean_price']])
-        mMscaled_data = pd.DataFrame(mMscaled_data, columns=['mMprice'])
-        df_pick = pd.concat([df_pick, mMscaled_data], axis= 1)
-        df_pick["category_code"] = df_pick["category_code"].apply(lambda x : str(x))
-        
-        del mMscaled_data, scaler
-        
-        return df_pick
-        
-    def to_matrix(df):
-        
-        # Tfidf 사전 df생성
-        df = df[['product_id', 'category_code', 'brand','mean_price', 'mMprice']]
-        df = df.groupby(['product_id']).agg({'category_code' : 'unique', 'brand' : 'unique',
-                                            'mMprice' : 'unique', 'mean_price' : 'unique'}).reset_index()
-        df['category_code'] = df['category_code'].apply(lambda x: x[0])
-        df['category_code'] =df['category_code'].apply(lambda row: eval(''.join(row)))
-        df['category_code'] =df['category_code'].apply(lambda row: '.'.join(row))
-        df['brand'] = df['brand'].apply(lambda x: x[0])
-        df['mean_price'] = df['mean_price'].apply(lambda x: x[0])
-        df['mMprice'] = df['mMprice'].apply(lambda x: x[0])
-
-        cols = ['category_code', 'brand']
-        df['category_code+brand'] =df[cols].apply(lambda row: '.'.join(row.values.astype(str)), axis=1)
-        df = df[['product_id', 'category_code+brand', 'mean_price', 'mMprice']]
-        df['category_code+brand'] = df['category_code+brand'].str.replace('.',' ')
-        
+        # CountVectorizer 적용
+        # sparse matrix 인 countvect 에서 직접 계산하면 더 효율적일 것으로 예상
         vect = CountVectorizer()
         docs = df['category_code+brand'].values
         countvect = vect.fit_transform(docs)
-
-        # 벡터 데이터프레임화
         countvect_df =pd.DataFrame(countvect.toarray(), columns = sorted(vect.vocabulary_))
         countvect_df.index = df['product_id'].values
-        
-        df_tfidf_con = df[['mMprice']]
-        df_tfidf_con = df_tfidf_con.set_index(countvect_df.index)
-        countvect_df = pd.concat([countvect_df,df_tfidf_con], axis = 1)
-        del df_tfidf_con
-        
-        # pearson matrix 생성
-        pearson_sim = countvect_df.T.corr()
-        
-        del countvect_df, vect, docs
+        del vect, docs, countvect
 
-        return pearson_sim
+        # 제품을 index로 가지는 데이터(제품별 특징을 담고있다)
+        df = pd.concat([df_minmax, countvect_df], axis= 1)
+        del df_minmax, countvect_df
 
-    # 각 대주제 카테고리별로 pearson table을 생성             
+        # 피어슨 유사도 계산
+        df = df.T.corr()
+        return df    
+
+    df = pd.read_parquet("view_data.parquet.gzip", columns = ["category_code_0"])
+    category_code_list = list(df["category_code_0"].unique())
+    del df
+
+    # 각 카테고리별로 pearson table을 생성하고 저장한다.
     for category_code in category_code_list:
-        df = df_by_category(target_category = category_code)
-        df = to_matrix(df)
+        df = make_pearson_table(target_category = category_code)
         pickling(df, f"{category_code}_pearson_table")
+        del df        
+    del category_code_list 
 
     # product_id 입력받으면 해당 제품의 1차 카테고리를 반환하는 dict 생성
-    df = pd.read_parquet("view_data.parquet.gzip", columns = ["product_id", "category_code"])
-    df = df.fillna("missing")
+    df = pd.read_parquet("view_data.parquet.gzip", columns = ["product_id", "category_code_0"])
     df = df.drop_duplicates(subset=None, keep='first', inplace=False, ignore_index=True)
-    df["category_code"] = df["category_code"].apply(lambda x : x.split(".")[0])
-    product_id_to_category_code = {product_id : category_code for product_id, category_code in list(zip(df["product_id"], df["category_code"]))}
-    pickling(product_id_to_category_code, "product_id_to_category_code")
-    del product_id_to_category_code, df 
+    product_id_to_category_code_0 = {product_id : category_code_0 for product_id, category_code_0 in list(zip(df["product_id"], df["category_code_0"]))}
+    pickling(product_id_to_category_code_0, "product_id_to_category_code_0")
+    del product_id_to_category_code_0, df    
 
     # product_id 별로 category와 brand, mean_of_price 를 가지는 DataFrame 생성후 저장
     df = pd.read_parquet("view_data.parquet.gzip", columns = ["product_id", "price"])
@@ -339,26 +286,19 @@ class Bns():
             
             # 해당 유저가 조회한 상품이 10개 이하이면
             else :
-
-                # 카테고리나 브랜드가 missing인 제품을 제외하고 해당 유저가 조회한 상품이 10개 이하이면
-                if user_id in test_pkl("lower_user_list"):
-                    print(f"user_id = {user_id} 는 view 한 product의 개수가 {test_pkl('user_unique_product_dict')[user_id]}으로 10이하입니다. CB 기반의 추천을 사용합니다.") 
-                    most_viewed_product_id = test_pkl("user_to_most_viewed_product_id")[user_id]
-                    print(f"해당 유저가 가장 많이 본 product_id = {most_viewed_product_id}")
-                    exp = test_pkl('explain')
-                    print(f"해당 유저가 가장 많이 본 product의 category_code = {exp[exp.index == most_viewed_product_id]['category_code'][most_viewed_product_id]}")
-                    print(f"해당 유저가 가장 많이 본 product의 mean of price = {exp[exp.index == most_viewed_product_id]['price'][most_viewed_product_id]}")                    
-                    user_index = test_pkl("cb_user_to_index")[user_id]
-                    viewed_product_index_list = list(np.where(test_pkl("lower_user_item_matrix")[user_index].toarray()[0] != 0)[0])
-                    viewed_product_id_list = list(map(test_pkl("cb_index_to_product").get, viewed_product_index_list ))
-                    pearson_table = test_pkl(f"{test_pkl('product_id_to_category_code')[most_viewed_product_id]}_pearson_table")
-                    pearson_table = pearson_table[~pearson_table.index.isin(viewed_product_id_list)]
-                    return list(pearson_table[most_viewed_product_id].sort_values(ascending=False).index[:10])
-                
-                # 해당 유저가 조회한 모든 제품이 카테고리나 브랜드가 결측값이라면
-                else:
-                    print(f"user_id = {user_id} 는 view 한 product가 모두 category 혹은 brand가 결측값입니다. 해석의 문제로 가장 view가 많은 product 10개를 추천합니다.")
-                    return test_pkl("popular_product_id_list")
+                print(f"user_id = {user_id} 는 view 한 product의 개수가 {test_pkl('user_unique_product_dict')[user_id]}으로 10이하입니다. CB 기반의 추천을 사용합니다.") 
+                most_viewed_product_id = test_pkl("user_to_most_viewed_product_id")[user_id]
+                print(f"해당 유저가 가장 많이 본 product_id = {most_viewed_product_id}")
+                exp = test_pkl('explain')
+                print(f"해당 유저가 가장 많이 본 product의 category_code = {exp[exp.index == most_viewed_product_id]['category_code'][most_viewed_product_id]}")
+                print(f"해당 유저가 가장 많이 본 product의 brand = {exp[exp.index == most_viewed_product_id]['brand'][most_viewed_product_id]}")
+                print(f"해당 유저가 가장 많이 본 product의 mean of price = {exp[exp.index == most_viewed_product_id]['price'][most_viewed_product_id]}")                    
+                user_index = test_pkl("cb_user_to_index")[user_id]
+                viewed_product_index_list = list(np.where(test_pkl("lower_user_item_matrix")[user_index].toarray()[0] != 0)[0])
+                viewed_product_id_list = list(map(test_pkl("cb_index_to_product").get, viewed_product_index_list ))
+                pearson_table = test_pkl(f"{test_pkl('product_id_to_category_code_0')[most_viewed_product_id]}_pearson_table")
+                pearson_table = pearson_table[~pearson_table.index.isin(viewed_product_id_list)]
+                return list(pearson_table[most_viewed_product_id].sort_values(ascending=False).index[:10])
         
         #  로그에 없는 신규유저라면
         else:
