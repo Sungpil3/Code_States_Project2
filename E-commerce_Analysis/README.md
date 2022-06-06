@@ -36,7 +36,80 @@
 ## 분석 세부 내용  
 
 ### 시각화를 통한 EDA
+To_EDA.ipynb 에서 확인가능합니다.
 
+분석을 위해 해당 파일 내에서 데이터 전처리를 진행하였습니다.
+
+사용하는 데이터는 다음과 같습니다.
+![](./images/EDA_Data_Frame.jpg)
+
+1. 요일별 User 행동유형 파악
+![](./images/User_Event_By_Week_Day.jpg)
+    좌측 상단 요일별 전체 행동유형   
+    우측상단 요일별 제품 조회 횟수  
+    좌측하단 요일별 제품 장바구니 보관 횟수  
+    우측하단 요일별 구매 횟수  
+    입니다.
+
+    금요일 / 토요일 / 일요일에 조회, 장바구니담기가 많이 이뤄지나,  
+    구매와는 다른 양상을 보입니다.
+
+    또한,  
+    y축을 보았을때 구매는 조회에 비해 2% 만 이뤄지는것을 알 수 있습니다.
+
+2. 날짜별 User의 행동유형 파악
+![](./images/User_Event_By_Date.jpg)
+    좌측 상단 날짜별 전체 행동유형   
+    우측상단 날짜별 제품 조회 횟수  
+    좌측하단 날짜별 제품 장바구니 보관 횟수  
+    우측하단 날짜별 구매 횟수  
+    입니다.
+
+    15일~17일에 조회,장바구니,결제가 확연히 많이 이뤄지나,  
+    이상치값이 있는지 확인해 보아야 합니다.
+
+3. 시간별 User의 행동유형 파악
+![](./images/User_Event_By_Time.jpg)
+    좌측 상단 시간별 전체 행동유형   
+    우측상단 시간별 제품 조회 횟수  
+    좌측하단 시간별 제품 장바구니 보관 횟수  
+    우측하단 시간별 구매 횟수  
+    입니다.
+
+    조회의 경우 5~10시, 16~20시까지 증가하는 추세이나,  
+    장바구니담기의 경우 5~12시까지 증가,
+    결제의 경우 5~12까지 증가하기에,
+    16~20시의 조회는 결제로 이뤄지지않는 아이쇼핑으로 짐작됩니다. 
+
+4. 1차 카테고리별 매출 비교
+![](./images/Sales_By_1st_Category.jpg)
+    결측치를 제외하곤,  
+    electronics, missng, appliances, computers, furniture 순으로 매출을 보이며,
+![](./images/Sales_By_1st_Category_Pie.jpg)  
+    electronics 제품이 84.76% 매출의 큰 비중을 차지합니다.
+
+5. 2차 카테고리별 매출 비교
+![](./images/Sales_By_2nd_Category.jpg)  
+    smartphone, kitchen, video, notebook, clocks
+    순으로 매출을 보이며,  
+    electronics제품군의 smartphone이 약 75%를 차지합니다.
+
+6. 3차 카테고리별 매출 비교
+![](./images/Sales_By_3rd_Category.jpg)
+    electronics제품군의 video에 속하는 tv  
+    appliances제품군의 kitchen에 속하는 washer  
+    electronics제품군의 audio에 속하는 headphone  
+    순으로 매출을 보이며,
+    y축의 비율이 10^7로 한자릿수 감소하였기에,  
+    3차 카테고리까지 설정된 제품군의 파이는 2차카테고리보다 크지 않다고 볼 수 있습니다.
+
+7. 브랜드별 매출 비교
+![](./images/Sales_By_Brand.jpg)  
+    apple, samsung, xiaomi 순으로  
+    매출과 동일하게 전자제품이 주 판매원인 브랜드가 강세였으며,  
+    이중 보편적으로 휴대폰 양대산맥으로 불리우는 apple, samsung이  
+    상위를 차지한것으로 보아 휴대폰판매비중이 높다는 것을 간접적으로  
+    느낄 수 있습니다.
 
 ### 시간당 접속 유저수의 변화  
 test_by_time.ipynb 에서 확인가능합니다.
@@ -140,3 +213,51 @@ test_by_time.ipynb 에서 확인가능합니다.
 
     유의확률이 0.829 입니다. 귀무가설을 기각하지 못합니다.
     요일별로 시간당 접속유저수의 평균은 모두 같습니다.    
+
+### Marketing ActionPlan
+To_ActionPlan.ipynb 에서 확인가능합니다.
+
+#### 1. 상시 마케팅
+
+    ![](./images/Sales_By_1st_Category_Pie.jpg)
+
+    Top5를 제외한 카테고리를 etc로 처리 후 확인 결과  
+    전체 매출의 약 85%가 electronics 제품군에서 발현됩니다.
+
+    1.1 :   
+    매출의 큰 비중을 차지하는 electronics 제품군에서 마케팅을 하는것이 효율적입니다.
+
+    ![](./images/Sales_By_Electronics.jpg)  
+    electronics 제품군 내 매출비중을 보았을때  
+    smartphone, tv, clocks, headphone, tablet, etc 순으로 나타납니다.
+
+    ![](./images/CVR%20by%20Electronics%20Category.jpg)  
+    조회(view)대비 결제(purchase)를 확인 하였을때,  
+    매출에 비해 tv, clocks의 전환율(CVR)이 낮습니다.
+
+    1.2:  
+    매출 비중이 큰 electronics내에서  
+    매출비중은 top5내 이지만, 전환율이 양의 선형관계가 아닌  
+    tv와 clocks 품목의 판매 독려를 위해 상시 세일 마케팅을 적용하여  
+    매출 증대효과를 기대합니다.
+
+#### 2. 타임세일형 마케팅
+   ![](./images/The_Reason_of_Marketing_in_Afternoon.jpg)
+   시간당 접속 유저수의 변화를 통계적으로 다룬  
+   test_by_time.ipynb 결과  
+   2.1 :  
+   접속유저가 유의하게 많고 매출도 유의하게 많은 Afternoon에 대해 마케팅을 집중한다.  
+
+   ![](./images/Afternoon_Sales_Category.jpg)  
+   Top5를 제외한 카테고리를 etc로 처리 후 Afternoon의 판매 비중을 확인한 결과    
+   smartphone, etc, tv, notebook, clocks, washer 순으로 나타납니다.
+
+   ![](./images/CVR_by_Afternoon_Sales.jpg)  
+   조회(view)대비 결제(purchase)를 확인 하였을때,
+   매출에 비해 notebook의 전환율(CVR)이 낮습니다.
+
+   2.2 :  
+   접속유저와 매출이 유의미하게 많아 마케팅의 효율이 좋은 Afternoon에  
+   판매비중은 top5안에 속하나, 전환율이 양의 선형관계가 아닌  
+   notebook 품목의 판매 독려를 위해 Afternoon에 국한한 타임세일 마케팅을 적용하여  
+   매출 증대 효과를 기대합니다.
